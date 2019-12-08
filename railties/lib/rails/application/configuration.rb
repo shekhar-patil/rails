@@ -18,8 +18,8 @@ module Rails
                     :session_options, :time_zone, :reload_classes_only_on_change,
                     :beginning_of_week, :filter_redirect, :x, :enable_dependency_loading,
                     :read_encrypted_secrets, :log_level, :content_security_policy_report_only,
-                    :content_security_policy_nonce_generator, :require_master_key, :credentials,
-                    :disable_sandbox, :add_autoload_paths_to_load_path
+                    :content_security_policy_nonce_generator, :content_security_policy_nonce_directives,
+                    :require_master_key, :credentials, :disable_sandbox, :add_autoload_paths_to_load_path
 
       attr_reader :encoding, :api_only, :loaded_config_version, :autoloader
 
@@ -60,6 +60,7 @@ module Rails
         @content_security_policy                 = nil
         @content_security_policy_report_only     = false
         @content_security_policy_nonce_generator = nil
+        @content_security_policy_nonce_directives = nil
         @require_master_key                      = false
         @loaded_config_version                   = nil
         @credentials                             = ActiveSupport::OrderedOptions.new
@@ -68,8 +69,10 @@ module Rails
         @autoloader                              = :classic
         @disable_sandbox                         = false
         @add_autoload_paths_to_load_path         = true
+        @feature_policy                          = nil
       end
 
+      # Loads default configurations. See {the result of the method for each version}[https://guides.rubyonrails.org/configuring.html#results-of-config-load-defaults].
       def load_defaults(target_version)
         case target_version.to_s
         when "5.0"
@@ -129,6 +132,7 @@ module Rails
 
           if respond_to?(:action_dispatch)
             action_dispatch.use_cookies_with_metadata = true
+            action_dispatch.return_only_media_type_on_content_type = false
           end
 
           if respond_to?(:action_mailer)
@@ -142,6 +146,8 @@ module Rails
           if respond_to?(:active_storage)
             active_storage.queues.analysis = :active_storage_analysis
             active_storage.queues.purge    = :active_storage_purge
+
+            active_storage.replace_on_assign_to_many = true
           end
 
           if respond_to?(:active_record)
@@ -149,6 +155,14 @@ module Rails
           end
         when "6.1"
           load_defaults "6.0"
+
+          if respond_to?(:active_record)
+            active_record.has_many_inversing = true
+          end
+
+          if respond_to?(:active_storage)
+            active_storage.track_variants = true
+          end
         else
           raise "Unknown version #{target_version.to_s.inspect}"
         end
@@ -207,7 +221,7 @@ module Rails
           yaml = Pathname.new(path)
           erb = DummyERB.new(yaml.read)
 
-          YAML.load(erb.result)
+          YAML.load(erb.result) || {}
         else
           {}
         end
@@ -296,6 +310,14 @@ module Rails
           @content_security_policy = ActionDispatch::ContentSecurityPolicy.new(&block)
         else
           @content_security_policy
+        end
+      end
+
+      def feature_policy(&block)
+        if block_given?
+          @feature_policy = ActionDispatch::FeaturePolicy.new(&block)
+        else
+          @feature_policy
         end
       end
 

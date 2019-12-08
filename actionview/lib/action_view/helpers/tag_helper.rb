@@ -24,8 +24,14 @@ module ActionView
                               visible).to_set
 
       BOOLEAN_ATTRIBUTES.merge(BOOLEAN_ATTRIBUTES.map(&:to_sym))
+      BOOLEAN_ATTRIBUTES.freeze
 
-      TAG_PREFIXES = ["aria", "data", :aria, :data].to_set
+      TAG_PREFIXES = ["aria", "data", :aria, :data].to_set.freeze
+
+      TAG_TYPES = {}
+      TAG_TYPES.merge! BOOLEAN_ATTRIBUTES.index_with(:boolean)
+      TAG_TYPES.merge! TAG_PREFIXES.index_with(:prefix)
+      TAG_TYPES.freeze
 
       PRE_CONTENT_STRINGS             = Hash.new { "" }
       PRE_CONTENT_STRINGS[:textarea]  = "\n"
@@ -61,13 +67,14 @@ module ActionView
           output = +""
           sep    = " "
           options.each_pair do |key, value|
-            if TAG_PREFIXES.include?(key) && value.is_a?(Hash)
+            type = TAG_TYPES[key]
+            if type == :prefix && value.is_a?(Hash)
               value.each_pair do |k, v|
                 next if v.nil?
                 output << sep
                 output << prefix_tag_option(key, k, v, escape)
               end
-            elsif BOOLEAN_ATTRIBUTES.include?(key)
+            elsif type == :boolean
               if value
                 output << sep
                 output << boolean_tag_option(key)
@@ -85,16 +92,37 @@ module ActionView
         end
 
         def tag_option(key, value, escape)
-          if value.is_a?(Array)
+          case value
+          when Array, Hash
+            value = build_tag_values(value)
             value = escape ? safe_join(value, " ") : value.join(" ")
           else
-            value = escape ? ERB::Util.unwrapped_html_escape(value) : value.to_s.dup
+            value = escape ? ERB::Util.unwrapped_html_escape(value) : value.to_s
           end
-          value.gsub!('"', "&quot;")
+          value = value.gsub('"', "&quot;") if value.include?('"')
           %(#{key}="#{value}")
         end
 
         private
+          def build_tag_values(*args)
+            tag_values = []
+
+            args.each do |tag_value|
+              case tag_value
+              when String
+                tag_values << tag_value if tag_value.present?
+              when Hash
+                tag_value.each do |key, val|
+                  tag_values << key if val
+                end
+              when Array
+                tag_values << build_tag_values(*tag_value).presence
+              end
+            end
+
+            tag_values.compact.flatten
+          end
+
           def prefix_tag_option(prefix, key, value, escape)
             key = "#{prefix}-#{key.to_s.dasherize}"
             unless value.is_a?(String) || value.is_a?(Symbol) || value.is_a?(BigDecimal)
@@ -107,8 +135,8 @@ module ActionView
             true
           end
 
-          def method_missing(called, *args, &block)
-            tag_string(called, *args, &block)
+          def method_missing(called, *args, **options, &block)
+            tag_string(called, *args, **options, &block)
           end
       end
 
@@ -233,6 +261,9 @@ module ActionView
       #
       #   tag("div", data: { name: 'Stephen', city_state: %w(Chicago IL) })
       #   # => <div data-name="Stephen" data-city-state="[&quot;Chicago&quot;,&quot;IL&quot;]" />
+      #
+      #   tag("div", class: { highlight: current_user.admin? })
+      #   # => <div class="highlight" />
       def tag(name = nil, options = nil, open = false, escape = true)
         if name.nil?
           tag_builder
@@ -259,6 +290,8 @@ module ActionView
       #   content_tag(:div, content_tag(:p, "Hello world!"), class: "strong")
       #    # => <div class="strong"><p>Hello world!</p></div>
       #   content_tag(:div, "Hello world!", class: ["strong", "highlight"])
+      #    # => <div class="strong highlight">Hello world!</div>
+      #   content_tag(:div, "Hello world!", class: ["strong", { highlight: current_user.admin? }])
       #    # => <div class="strong highlight">Hello world!</div>
       #   content_tag("select", options, multiple: true)
       #    # => <select multiple="multiple">...options...</select>

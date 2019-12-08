@@ -228,11 +228,11 @@ module Rails
 
       if yaml.exist?
         require "erb"
-        config = YAML.load(ERB.new(yaml.read).result) || {}
-        config = (config["shared"] || {}).merge(config[env] || {})
+        config = YAML.load(ERB.new(yaml.read).result, symbolize_names: true) || {}
+        config = (config[:shared] || {}).merge(config[env.to_sym] || {})
 
         ActiveSupport::OrderedOptions.new.tap do |options|
-          options.update(NonSymbolAccessDeprecatedHash.new(config))
+          options.update(config)
         end
       else
         raise "Could not load configuration. No such file - #{yaml}"
@@ -270,7 +270,9 @@ module Rails
           "action_dispatch.use_cookies_with_metadata" => config.action_dispatch.use_cookies_with_metadata,
           "action_dispatch.content_security_policy" => config.content_security_policy,
           "action_dispatch.content_security_policy_report_only" => config.content_security_policy_report_only,
-          "action_dispatch.content_security_policy_nonce_generator" => config.content_security_policy_nonce_generator
+          "action_dispatch.content_security_policy_nonce_generator" => config.content_security_policy_nonce_generator,
+          "action_dispatch.content_security_policy_nonce_directives" => config.content_security_policy_nonce_directives,
+          "action_dispatch.feature_policy" => config.feature_policy,
         )
       end
     end
@@ -349,7 +351,7 @@ module Rails
       files, dirs = config.watchable_files.dup, config.watchable_dirs.dup
 
       ActiveSupport::Dependencies.autoload_paths.each do |path|
-        dirs[path.to_s] = [:rb]
+        File.file?(path) ? files << path.to_s : dirs[path.to_s] = [:rb]
       end
 
       [files, dirs]
@@ -481,10 +483,6 @@ module Rails
     end
 
     console do
-      require "pp"
-    end
-
-    console do
       unless ::Kernel.private_method_defined?(:y)
         require "psych/y"
       end
@@ -501,7 +499,6 @@ module Rails
     end
 
   protected
-
     alias :build_middleware_stack :app
 
     def run_tasks_blocks(app) #:nodoc:
@@ -581,7 +578,6 @@ module Rails
     end
 
     private
-
       def generate_development_secret
         if secrets.secret_key_base.nil?
           key_file = Rails.root.join("tmp/development_secret.txt")
@@ -607,53 +603,6 @@ module Rails
 
       def build_middleware
         config.app_middleware + super
-      end
-
-      class NonSymbolAccessDeprecatedHash < HashWithIndifferentAccess # :nodoc:
-        def initialize(value = nil)
-          if value.is_a?(Hash)
-            value.each_pair { |k, v| self[k] = v }
-          else
-            super
-          end
-        end
-
-        def []=(key, value)
-          regular_writer(key.to_sym, convert_value(value, for: :assignment))
-        end
-
-        private
-
-          def convert_key(key)
-            unless key.kind_of?(Symbol)
-              ActiveSupport::Deprecation.warn(<<~MESSAGE.squish)
-                Accessing hashes returned from config_for by non-symbol keys
-                is deprecated and will be removed in Rails 6.1.
-                Use symbols for access instead.
-              MESSAGE
-
-              key = key.to_sym
-            end
-
-            key
-          end
-
-          def convert_value(value, options = {}) # :doc:
-            if value.is_a? Hash
-              if options[:for] == :to_hash
-                value.to_hash
-              else
-                self.class.new(value)
-              end
-            elsif value.is_a?(Array)
-              if options[:for] != :assignment || value.frozen?
-                value = value.dup
-              end
-              value.map! { |e| convert_value(e, options) }
-            else
-              value
-            end
-          end
       end
   end
 end

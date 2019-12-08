@@ -114,16 +114,16 @@ module ActiveRecord
       # if the value is a Time responding to usec.
       def quoted_date(value)
         if value.acts_like?(:time)
-          zone_conversion_method = ActiveRecord::Base.default_timezone == :utc ? :getutc : :getlocal
-
-          if value.respond_to?(zone_conversion_method)
-            value = value.send(zone_conversion_method)
+          if ActiveRecord::Base.default_timezone == :utc
+            value = value.getutc if value.respond_to?(:getutc) && !value.utc?
+          else
+            value = value.getlocal if value.respond_to?(:getlocal)
           end
         end
 
         result = value.to_s(:db)
         if value.respond_to?(:usec) && value.usec > 0
-          "#{result}.#{sprintf("%06d", value.usec)}"
+          result << "." << sprintf("%06d", value.usec)
         else
           result
         end
@@ -155,7 +155,18 @@ module ActiveRecord
       #
       #   "#{table_name}.#{column_name}"
       #   "#{column_name}"
-      COLUMN_NAME = /\A(?:\w+\.)?\w+\z/i
+      COLUMN_NAME = /
+        \A
+        (
+          (?:
+            # table_name.column_name | function(one or no argument)
+            ((?:\w+\.)?\w+) | \w+\((?:|\g<2>)\)
+          )
+          (?:(?:\s+AS)?\s+\w+)?
+        )
+        (?:\s*,\s*\g<1>)*
+        \z
+      /ix
 
       # Regexp for column names with order (with or without a table name prefix,
       # with or without various order modifiers). Matches the following:
@@ -170,10 +181,15 @@ module ActiveRecord
       #   "#{column_name} NULLS LAST"
       COLUMN_NAME_WITH_ORDER = /
         \A
-        (?:\w+\.)?
-        \w+
-        (?:\s+ASC|\s+DESC)?
-        (?:\s+NULLS\s+(?:FIRST|LAST))?
+        (
+          (?:
+            # table_name.column_name | function(one or no argument)
+            ((?:\w+\.)?\w+) | \w+\((?:|\g<2>)\)
+          )
+          (?:\s+ASC|\s+DESC)?
+          (?:\s+NULLS\s+(?:FIRST|LAST))?
+        )
+        (?:\s*,\s*\g<1>)*
         \z
       /ix
 
