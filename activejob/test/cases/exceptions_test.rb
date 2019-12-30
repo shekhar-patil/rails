@@ -129,6 +129,63 @@ class ExceptionsTest < ActiveSupport::TestCase
     end
   end
 
+  test "retry jitter uses value from ActiveJob::Base.retry_jitter by default" do
+    old_jitter = ActiveJob::Base.retry_jitter
+    ActiveJob::Base.retry_jitter = 4.0
+
+    travel_to Time.now
+
+    Kernel.stub(:rand, ->(arg) { arg }) do
+      RetryJob.perform_later "ExponentialWaitTenAttemptsError", 5, :log_scheduled_at
+
+      assert_equal [
+        "Raised ExponentialWaitTenAttemptsError for the 1st time",
+        "Next execution scheduled at #{(Time.now + 7.seconds).to_f}",
+        "Raised ExponentialWaitTenAttemptsError for the 2nd time",
+        "Next execution scheduled at #{(Time.now + 82.seconds).to_f}",
+        "Raised ExponentialWaitTenAttemptsError for the 3rd time",
+        "Next execution scheduled at #{(Time.now + 407.seconds).to_f}",
+        "Raised ExponentialWaitTenAttemptsError for the 4th time",
+        "Next execution scheduled at #{(Time.now + 1282.seconds).to_f}",
+        "Successfully completed job"
+      ], JobBuffer.values
+    end
+  ensure
+    ActiveJob::Base.retry_jitter = old_jitter
+  end
+
+  test "retry jitter disabled with nil" do
+    travel_to Time.now
+
+    Kernel.stub(:rand, ->(arg) { arg }) do
+      RetryJob.perform_later "DisabledJitterError", 3, :log_scheduled_at
+
+      assert_equal [
+        "Raised DisabledJitterError for the 1st time",
+        "Next execution scheduled at #{(Time.now + 3.seconds).to_f}",
+        "Raised DisabledJitterError for the 2nd time",
+        "Next execution scheduled at #{(Time.now + 3.seconds).to_f}",
+        "Successfully completed job"
+      ], JobBuffer.values
+    end
+  end
+
+  test "retry jitter disabled with zero" do
+    travel_to Time.now
+
+    Kernel.stub(:rand, ->(arg) { arg }) do
+      RetryJob.perform_later "ZeroJitterError", 3, :log_scheduled_at
+
+      assert_equal [
+        "Raised ZeroJitterError for the 1st time",
+        "Next execution scheduled at #{(Time.now + 3.seconds).to_f}",
+        "Raised ZeroJitterError for the 2nd time",
+        "Next execution scheduled at #{(Time.now + 3.seconds).to_f}",
+        "Successfully completed job"
+      ], JobBuffer.values
+    end
+  end
+
   test "custom wait retrying job" do
     travel_to Time.now
 

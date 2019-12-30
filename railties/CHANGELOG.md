@@ -1,3 +1,59 @@
+*   Allow configuration of eager_load behaviour for rake environment:
+
+        `config.rake_eager_load`
+
+    Defaults to `false` as per previous behaviour.
+
+    *Thierry Joyal*
+
+*   Ensure Rails migration generator respects system-wide primary key config
+
+    When rails is configured to use a specific primary key type:
+    ```
+    config.generators do |g|
+      g.orm :active_record, primary_key_type: :uuid
+    end
+    ```
+
+    Previously:
+
+    $ bin/rails g migration add_location_to_users location:references
+
+    The references line in the migration would not have `type: :uuid`.
+    This change causes the type to be applied appropriately.
+
+    *Louis-Michel Couture* *Dermot Haughey*
+
+*  Deprecate `Rails::DBConsole#config`
+
+  `Rails::DBConsole#config` is deprecated without replacement. Use `Rails::DBConsole.db_config.configuration_hash` instead.
+
+    *Eileen M. Uchitelle*, *John Crepezzi*
+
+* `Rails.application.config_for` merges shared configuration deeply.
+
+    ```yaml
+    # config/example.yml
+    shared:
+      foo:
+        bar:
+          baz: 1
+    development:
+      foo:
+        bar:
+          qux: 2
+    ```
+
+    ```ruby
+    # Previously
+    Rails.application.config_for(:example)[:foo][:bar] #=> { qux: 2 }
+
+    # Now
+    Rails.application.config_for(:example)[:foo][:bar] #=> { baz: 1, qux: 2 }
+    ```
+
+    *Yuhei Kiriyama*
+
 *   Remove access to values in nested hashes returned by `Rails.application.config_for` via String keys.
 
     ```yaml
@@ -19,7 +75,7 @@
     now able to modify `autoload_paths`, `autoload_once_paths`, and
     `eager_load_paths`.
 
-    As a consequence, applications cannnot autoload within those files. Before, they technnically could, but changes in autoloaded classes or modules had no effect anyway in the configuration because reloading does not reboot.
+    As a consequence, applications cannot autoload within those files. Before, they technnically could, but changes in autoloaded classes or modules had no effect anyway in the configuration because reloading does not reboot.
 
     Ways to use application code in these files:
 

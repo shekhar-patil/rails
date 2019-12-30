@@ -1,3 +1,40 @@
+*   Fix possible information leak / session hijacking vulnerability.
+
+    The `ActionDispatch::Session::MemcacheStore` is still vulnerable given it requires the
+    gem dalli to be updated as well.
+
+    CVE-2019-16782.
+
+*   Include child session assertion count in ActionDispatch::IntegrationTest
+
+    `IntegrationTest#open_session` uses `dup` to create the new session, which
+    meant it had its own copy of `@assertions`. This prevented the assertions
+    from being correctly counted and reported.
+
+    Child sessions now have their `attr_accessor` overridden to delegate to the
+    root session.
+
+    Fixes #32142
+
+    *Sam Bostock*
+
+*   Add SameSite protection to every written cookie.
+
+    Enabling `SameSite` cookie protection is an addition to CSRF protection,
+    where cookies won't be sent by browsers in cross-site POST requests when set to `:lax`.
+
+    `:strict` disables cookies being sent in cross-site GET or POST requests.
+
+    Passing `:none` disables this protection and is the same as previous versions albeit a `; SameSite=None` is appended to the cookie.
+
+    See upgrade instructions in config/initializers/new_framework_defaults_6_1.rb.
+
+    More info [here](https://tools.ietf.org/html/draft-west-first-party-cookies-07)
+
+    _NB: Technically already possible as Rack supports SameSite protection, this is to ensure it's applied to all cookies_
+
+    *Cédric Fabianski*
+
 *   Bring back the feature that allows loading external route files from the router.
 
     This feature existed back in 2012 but got reverted with the incentive that

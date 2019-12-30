@@ -137,6 +137,8 @@ defaults to `:debug` for all environments. The available log levels are: `:debug
 
 * `config.middleware` allows you to configure the application's middleware. This is covered in depth in the [Configuring Middleware](#configuring-middleware) section below.
 
+* `config.rake_eager_load` when `true`, eager load the application when running Rake tasks. Defaults to `false`.
+
 * `config.reload_classes_only_on_change` enables or disables reloading of classes only when tracked files change. By default tracks everything on autoload paths and is set to `true`. If `config.cache_classes` is `true`, this option is ignored.
 
 * `config.credentials.content_path` configures lookup path for encrypted credentials.
@@ -216,10 +218,10 @@ The full set of methods that can be used in this block are as follows:
 * `integration_tool` defines which integration tool to use to generate integration tests. Defaults to `:test_unit`.
 * `system_tests` defines which integration tool to use to generate system tests. Defaults to `:test_unit`.
 * `orm` defines which orm to use. Defaults to `false` and will use Active Record by default.
-* `resource_controller` defines which generator to use for generating a controller when using `rails generate resource`. Defaults to `:controller`.
+* `resource_controller` defines which generator to use for generating a controller when using `bin/rails generate resource`. Defaults to `:controller`.
 * `resource_route` defines whether a resource route definition should be generated
   or not. Defaults to `true`.
-* `scaffold_controller` different from `resource_controller`, defines which generator to use for generating a _scaffolded_ controller when using `rails generate scaffold`. Defaults to `:scaffold_controller`.
+* `scaffold_controller` different from `resource_controller`, defines which generator to use for generating a _scaffolded_ controller when using `bin/rails generate scaffold`. Defaults to `:scaffold_controller`.
 * `stylesheets` turns on the hook for stylesheets in generators. Used in Rails for when the `scaffold` generator is run, but this hook can be used in other generates as well. Defaults to `true`.
 * `stylesheet_engine` configures the stylesheet engine (for e.g. sass) to be used when generating assets. Defaults to `:css`.
 * `scaffold_stylesheet` creates `scaffold.css` when generating a scaffolded resource. Defaults to `true`.
@@ -807,6 +809,8 @@ There are a few configuration options available in Active Support:
 
 * `config.active_job.log_arguments` controls if the arguments of a job are logged. Defaults to `true`.
 
+* `config.active_job.retry_jitter` controls the amount of "jitter" (random variation) applied to the delay time calculated when retrying failed jobs. Defaults to `0.15`.
+
 ### Configuring Action Cable
 
 * `config.action_cable.url` accepts a string for the URL for where
@@ -965,7 +969,7 @@ The `config/database.yml` file contains sections for three different environment
 
 If you wish, you can manually specify a URL inside of your `config/database.yml`
 
-```
+```yaml
 development:
   url: postgresql://localhost/blog_development?pool=5
 ```
@@ -982,7 +986,7 @@ Since there are two ways to configure your connection (using `config/database.ym
 
 If you have an empty `config/database.yml` file but your `ENV['DATABASE_URL']` is present, then Rails will connect to the database via your environment variable:
 
-```
+```bash
 $ cat config/database.yml
 
 $ echo $DATABASE_URL
@@ -991,7 +995,7 @@ postgresql://localhost/my_database
 
 If you have a `config/database.yml` but no `ENV['DATABASE_URL']` then this file will be used to connect to your database:
 
-```
+```bash
 $ cat config/database.yml
 development:
   adapter: postgresql
@@ -1005,7 +1009,7 @@ If you have both `config/database.yml` and `ENV['DATABASE_URL']` set then Rails 
 
 When duplicate connection information is provided the environment variable will take precedence:
 
-```
+```bash
 $ cat config/database.yml
 development:
   adapter: sqlite3
@@ -1015,10 +1019,10 @@ development:
 $ echo $DATABASE_URL
 postgresql://localhost/my_database
 
-$ rails runner 'puts ActiveRecord::Base.configurations'
+$ bin/rails runner 'puts ActiveRecord::Base.configurations'
 #<ActiveRecord::DatabaseConfigurations:0x00007fd50e209a28>
 
-$ rails runner 'puts ActiveRecord::Base.configurations.inspect'
+$ bin/rails runner 'puts ActiveRecord::Base.configurations.inspect'
 #<ActiveRecord::DatabaseConfigurations:0x00007fc8eab02880 @configurations=[
   #<ActiveRecord::DatabaseConfigurations::UrlConfig:0x00007fc8eab020b0
     @env_name="development", @spec_name="primary",
@@ -1031,7 +1035,7 @@ Here the adapter, host, and database match the information in `ENV['DATABASE_URL
 
 If non-duplicate information is provided you will get all unique values, environment variable still takes precedence in cases of any conflicts.
 
-```
+```bash
 $ cat config/database.yml
 development:
   adapter: sqlite3
@@ -1040,10 +1044,10 @@ development:
 $ echo $DATABASE_URL
 postgresql://localhost/my_database
 
-$ rails runner 'puts ActiveRecord::Base.configurations'
+$ bin/rails runner 'puts ActiveRecord::Base.configurations'
 #<ActiveRecord::DatabaseConfigurations:0x00007fd50e209a28>
 
-$ rails runner 'puts ActiveRecord::Base.configurations.inspect'
+$ bin/rails runner 'puts ActiveRecord::Base.configurations.inspect'
 #<ActiveRecord::DatabaseConfigurations:0x00007fc8eab02880 @configurations=[
   #<ActiveRecord::DatabaseConfigurations::UrlConfig:0x00007fc8eab020b0
     @env_name="development", @spec_name="primary",
@@ -1056,7 +1060,7 @@ Since pool is not in the `ENV['DATABASE_URL']` provided connection information i
 
 The only way to explicitly not use the connection information in `ENV['DATABASE_URL']` is to specify an explicit URL connection using the `"url"` sub key:
 
-```
+```bash
 $ cat config/database.yml
 development:
   url: sqlite3:NOT_my_database
@@ -1064,10 +1068,10 @@ development:
 $ echo $DATABASE_URL
 postgresql://localhost/my_database
 
-$ rails runner 'puts ActiveRecord::Base.configurations'
+$ bin/rails runner 'puts ActiveRecord::Base.configurations'
 #<ActiveRecord::DatabaseConfigurations:0x00007fd50e209a28>
 
-$ rails runner 'puts ActiveRecord::Base.configurations.inspect'
+$ bin/rails runner 'puts ActiveRecord::Base.configurations.inspect'
 #<ActiveRecord::DatabaseConfigurations:0x00007fc8eab02880 @configurations=[
   #<ActiveRecord::DatabaseConfigurations::UrlConfig:0x00007fc8eab020b0
     @env_name="development", @spec_name="primary",
@@ -1080,7 +1084,7 @@ Here the connection information in `ENV['DATABASE_URL']` is ignored, note the di
 
 Since it is possible to embed ERB in your `config/database.yml` it is best practice to explicitly show you are using the `ENV['DATABASE_URL']` to connect to your database. This is especially useful in production since you should not commit secrets like your database password into your source control (such as Git).
 
-```
+```bash
 $ cat config/database.yml
 production:
   url: <%= ENV['DATABASE_URL'] %>
@@ -1154,7 +1158,7 @@ production:
 
 If enabled, Active Record will create up to `1000` prepared statements per database connection by default. To modify this behavior you can set `statement_limit` to a different value:
 
-```
+```yaml
 production:
   adapter: postgresql
   statement_limit: 200
@@ -1208,7 +1212,7 @@ Imagine you have a server which mirrors the production environment but is only u
 That environment is no different than the default ones, start a server with `rails server -e staging`, a console with `rails console -e staging`, `Rails.env.staging?` works, etc.
 
 
-### Deploy to a subdirectory (relative URL root)
+### Deploy to a Subdirectory (relative URL root)
 
 By default Rails expects that your application is running at the root
 (e.g. `/`). This section explains how to run your application inside a directory.
