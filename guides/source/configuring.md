@@ -232,6 +232,44 @@ The full set of methods that can be used in this block are as follows:
 
 Every Rails application comes with a standard set of middleware which it uses in this order in the development environment:
 
+* `ActionDispatch::HostAuthorization` prevents against DNS rebinding and other `Host` header attacks.
+   It is included in the development environment by default with the following configuration:
+
+   ```ruby
+   Rails.application.config.hosts = [
+     IPAddr.new("0.0.0.0/0"), # All IPv4 addresses.
+     IPAddr.new("::/0"),      # All IPv6 addresses.
+     "localhost"              # The localhost reserved domain.
+   ]
+   ```
+
+   In other environments `Rails.application.config.hosts` is empty and no
+   `Host` header checks will be done. If you want to guard against header
+   attacks on production, you have to manually permit the allowed hosts
+   with:
+
+   ```ruby
+   Rails.application.config.hosts << "product.com"
+   ```
+
+   The host of a request is checked against the `hosts` entries with the case
+   operator (`#===`), which lets `hosts` support entries of type `Regexp`,
+   `Proc` and `IPAddr` to name a few. Here is an example with a regexp.
+
+   ```ruby
+   # Allow requests from subdomains like `www.product.com` and
+   # `beta1.product.com`.
+   Rails.application.config.hosts << /.*\.product\.com/
+   ```
+
+   A special case is supported that allows you to permit all sub-domains:
+
+   ```ruby
+   # Allow requests from subdomains like `www.product.com` and
+   # `beta1.product.com`.
+   Rails.application.config.hosts << ".product.com"
+   ```
+
 * `ActionDispatch::SSL` forces every request to be served using HTTPS. Enabled if `config.force_ssl` is set to `true`. Options passed to this can be configured by setting `config.ssl_options`.
 * `ActionDispatch::Static` is used to serve static assets. Disabled if `config.public_file_server.enabled` is `false`. Set `config.public_file_server.index_name` if you need to serve a static directory index file that is not named `index`. For example, to serve `main.html` instead of `index.html` for directory requests, set `config.public_file_server.index_name` to `"main"`.
 * `ActionDispatch::Executor` allows thread safe code reloading. Disabled if `config.allow_concurrency` is `false`, which causes `Rack::Lock` to be loaded. `Rack::Lock` wraps the app in mutex so it can only be called by a single thread at a time.
@@ -277,6 +315,19 @@ Middlewares can also be completely swapped out and replaced with others:
 
 ```ruby
 config.middleware.swap ActionController::Failsafe, Lifo::Failsafe
+```
+
+Middlewares can be moved from one place to another:
+
+```ruby
+config.middleware.move_before ActionDispatch::Flash, Magical::Unicorns
+```
+
+This will move the `Magical::Unicorns` middleware before
+`ActionDispatch::Flash`. You can also move it after:
+
+```ruby
+config.middleware.move_after ActionDispatch::Flash, Magical::Unicorns
 ```
 
 They can also be removed from the stack completely:
@@ -745,6 +796,10 @@ There are a few configuration options available in Active Support:
 * `ActiveSupport::Cache::Store.logger` specifies the logger to use within cache store operations.
 
 * `ActiveSupport::Deprecation.behavior` alternative setter to `config.active_support.deprecation` which configures the behavior of deprecation warnings for Rails.
+
+* `ActiveSupport::Deprecation.disallowed_behavior` alternative setter to `config.active_support.disallowed_deprecation` which configures the behavior of disallowed deprecation warnings for Rails.
+
+* `ActiveSupport::Deprecation.disallowed_warnings` alternative setter to `config.active_support.disallowed_deprecation_warnings` which configures deprecation warnings that the Application considers disallowed. This allows, for example, specific deprecations to be treated as hard failures.
 
 * `ActiveSupport::Deprecation.silence` takes a block in which all deprecation warnings are silenced.
 
@@ -1374,7 +1429,7 @@ Below is a comprehensive list of all the initializers found in Rails in the orde
 
 * `i18n.callbacks`: In the development environment, sets up a `to_prepare` callback which will call `I18n.reload!` if any of the locales have changed since the last request. In production mode this callback will only run on the first request.
 
-* `active_support.deprecation_behavior`: Sets up deprecation reporting for environments, defaulting to `:log` for development, `:notify` for production, and `:stderr` for test. If a value isn't set for `config.active_support.deprecation` then this initializer will prompt the user to configure this line in the current environment's `config/environments` file. Can be set to an array of values.
+* `active_support.deprecation_behavior`: Sets up deprecation reporting for environments, defaulting to `:log` for development, `:notify` for production, and `:stderr` for test. If a value isn't set for `config.active_support.deprecation` then this initializer will prompt the user to configure this line in the current environment's `config/environments` file. Can be set to an array of values. This initializer also sets up behaviors for disallowed deprecations, defaulting to `:raise` for development and test and `:log` for production. Disallowed deprecation warnings default to an empty array.
 
 * `active_support.initialize_time_zone`: Sets the default time zone for the application based on the `config.time_zone` setting, which defaults to "UTC".
 
